@@ -1,0 +1,88 @@
+# =============================================================================
+# data/parts_data.py — Body parts and their stat bonuses
+# =============================================================================
+
+BODY_PARTS = [
+    {
+        "id": "shield_plating",
+        "name": "Shield Plating",
+        "rarity": "common",
+        "description": "Reinforced armor plating",
+        "def_bonus": 2.0,
+        "hp_bonus": 0,
+        "regen_bonus": 0,
+        "wave_unlock": 1,
+    },
+    {
+        "id": "vital_core",
+        "name": "Vital Core",
+        "rarity": "common",
+        "description": "Increases maximum health",
+        "def_bonus": 0,
+        "hp_bonus": 15.0,
+        "regen_bonus": 0,
+        "wave_unlock": 1,
+    },
+    {
+        "id": "regenerator",
+        "name": "Regenerator",
+        "rarity": "uncommon",
+        "description": "Passive HP regeneration boost",
+        "def_bonus": 0,
+        "hp_bonus": 5.0,
+        "regen_bonus": 1.5,
+        "wave_unlock": 3,
+    },
+    {
+        "id": "crystal_armor",
+        "name": "Crystal Armor",
+        "rarity": "uncommon",
+        "description": "Hardened crystalline defense",
+        "def_bonus": 4.0,
+        "hp_bonus": 8.0,
+        "regen_bonus": 0,
+        "wave_unlock": 5,
+    },
+    {
+        "id": "reinforced_shell",
+        "name": "Reinforced Shell",
+        "rarity": "rare",
+        "description": "Thick protective shell",
+        "def_bonus": 6.0,
+        "hp_bonus": 25.0,
+        "regen_bonus": 0,
+        "wave_unlock": 8,
+    },
+    {
+        "id": "nanomesh",
+        "name": "Nanomesh",
+        "rarity": "rare",
+        "description": "Self-repairing nanotechnology",
+        "def_bonus": 3.0,
+        "hp_bonus": 12.0,
+        "regen_bonus": 3.0,
+        "wave_unlock": 10,
+    },
+    {
+        "id": "twilight_core",
+        "name": "Twilight Core",
+        "rarity": "legendary",
+        "description": "Essence of the void itself",
+        "def_bonus": 8.0,
+        "hp_bonus": 40.0,
+        "regen_bonus": 2.0,
+        "wave_unlock": 15,
+    },
+    {
+        "id": "prismatic_shell",
+        "name": "Prismatic Shell",
+        "rarity": "legendary",
+        "description": "Refracts incoming damage",
+        "def_bonus": 10.0,
+        "hp_bonus": 30.0,
+        "regen_bonus": 0,
+        "wave_unlock": 20,
+    },
+]
+
+RARITY_ORDER = ["common", "uncommon", "rare", "legendary"]
