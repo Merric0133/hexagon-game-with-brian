@@ -6,6 +6,7 @@
 #   SceneManager — holds the active scene, wires switching
 #   manager     — global singleton imported throughout the project
 # =============================================================================
+from typing import Optional
 
 
 class BaseScene:
@@ -21,7 +22,7 @@ class BaseScene:
 
     def __init__(self):
         # Assigned by SceneManager.register()
-        self.manager: "SceneManager | None" = None
+        self.manager: Optional["SceneManager"] = None
 
     # Override in subclasses as needed ----------------------------------
 
@@ -55,7 +56,7 @@ class SceneManager:
 
     def __init__(self):
         self._scenes: dict[str, BaseScene] = {}
-        self._active: BaseScene | None = None
+        self._active: Optional[BaseScene] = None
         self._active_name: str = ""
 
     # ---------------------------------------------------------- Registration

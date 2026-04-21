@@ -1,6 +1,7 @@
 import pygame
 import sys
 import os
+from typing import Optional
 
 # Ensure hexcore/ is on sys.path when running from the parent directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -22,7 +23,7 @@ from customize_scene import CustomizeScene
 from codex_scene    import CodexScene
 
 
-def _make_icon() -> pygame.Surface | None:
+def _make_icon() -> Optional[pygame.Surface]:
     """
     Attempt to generate a tiny hex icon for the window title bar.
     Returns None silently if anything goes wrong.
