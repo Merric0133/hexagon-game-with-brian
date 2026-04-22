@@ -1,5 +1,5 @@
 import pygame
-from enum import Enum, auto
+from enum import Enum
 
 # Screen
 SCREEN_WIDTH, SCREEN_HEIGHT = 1280, 720
@@ -55,11 +55,11 @@ PLAYER_BASE_REGEN  = 0.5
 
 # ── Cell-type mechanics ───────────────────────────────────────────────────────
 class CellType(Enum):
-    EMPTY  = auto()
-    HEART  = auto()   # +20 max HP
-    MOVE   = auto()   # +60 speed
-    DAMAGE = auto()   # contact damage aura; also boosts projectile dmg
-    SHIELD = auto()   # +10 defense / reduces incoming damage
+    EMPTY  = 0
+    HEART  = 1   # +20 max HP
+    MOVE   = 2   # +60 speed
+    DAMAGE = 3   # contact damage aura; also boosts projectile dmg
+    SHIELD = 4   # +10 defense / reduces incoming damage
 
 CELL_ICONS = {
     CellType.EMPTY:  "",

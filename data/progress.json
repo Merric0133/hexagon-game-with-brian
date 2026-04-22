@@ -1,0 +1,194 @@
+{
+  "highest_wave": 10,
+  "high_score": 10050,
+  "selected_skin": "gold",
+  "inventory": {
+    "HEART": 2,
+    "MOVE": 1,
+    "DAMAGE": 1,
+    "SHIELD": 0
+  },
+  "equipped": [],
+  "honeycomb_body": [
+    {
+      "q": 0,
+      "r": 1,
+      "type": "HEART"
+    },
+    {
+      "q": 1,
+      "r": 0,
+      "type": "HEART"
+    },
+    {
+      "q": -1,
+      "r": 1,
+      "type": "HEART"
+    },
+    {
+      "q": -1,
+      "r": 0,
+      "type": "HEART"
+    },
+    {
+      "q": 0,
+      "r": -1,
+      "type": "HEART"
+    },
+    {
+      "q": 1,
+      "r": -1,
+      "type": "HEART"
+    },
+    {
+      "q": 1,
+      "r": -2,
+      "type": "MOVE"
+    },
+    {
+      "q": 0,
+      "r": -2,
+      "type": "MOVE"
+    },
+    {
+      "q": -1,
+      "r": -1,
+      "type": "MOVE"
+    },
+    {
+      "q": -2,
+      "r": 0,
+      "type": "MOVE"
+    },
+    {
+      "q": -2,
+      "r": 1,
+      "type": "MOVE"
+    },
+    {
+      "q": -2,
+      "r": 2,
+      "type": "MOVE"
+    },
+    {
+      "q": -1,
+      "r": 2,
+      "type": "MOVE"
+    },
+    {
+      "q": 0,
+      "r": 2,
+      "type": "MOVE"
+    },
+    {
+      "q": 1,
+      "r": 1,
+      "type": "MOVE"
+    },
+    {
+      "q": 2,
+      "r": 0,
+      "type": "MOVE"
+    },
+    {
+      "q": 2,
+      "r": -1,
+      "type": "MOVE"
+    },
+    {
+      "q": 2,
+      "r": -2,
+      "type": "MOVE"
+    },
+    {
+      "q": 3,
+      "r": -3,
+      "type": "DAMAGE"
+    },
+    {
+      "q": 2,
+      "r": -3,
+      "type": "DAMAGE"
+    },
+    {
+      "q": 1,
+      "r": -3,
+      "type": "DAMAGE"
+    },
+    {
+      "q": 0,
+      "r": -3,
+      "type": "DAMAGE"
+    },
+    {
+      "q": -1,
+      "r": -2,
+      "type": "DAMAGE"
+    },
+    {
+      "q": -2,
+      "r": -1,
+      "type": "DAMAGE"
+    },
+    {
+      "q": -3,
+      "r": 0,
+      "type": "DAMAGE"
+    },
+    {
+      "q": -3,
+      "r": 1,
+      "type": "DAMAGE"
+    },
+    {
+      "q": -3,
+      "r": 2,
+      "type": "DAMAGE"
+    },
+    {
+      "q": -3,
+      "r": 3,
+      "type": "DAMAGE"
+    },
+    {
+      "q": -2,
+      "r": 3,
+      "type": "DAMAGE"
+    },
+    {
+      "q": -1,
+      "r": 3,
+      "type": "DAMAGE"
+    },
+    {
+      "q": 0,
+      "r": 3,
+      "type": "DAMAGE"
+    },
+    {
+      "q": 1,
+      "r": 2,
+      "type": "DAMAGE"
+    },
+    {
+      "q": 2,
+      "r": 1,
+      "type": "DAMAGE"
+    },
+    {
+      "q": 3,
+      "r": 0,
+      "type": "DAMAGE"
+    },
+    {
+      "q": 3,
+      "r": -1,
+      "type": "DAMAGE"
+    },
+    {
+      "q": 3,
+      "r": -2,
+      "type": "DAMAGE"
+    }
+  ]
+}

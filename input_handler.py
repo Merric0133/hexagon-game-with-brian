@@ -10,6 +10,11 @@ class InputHandler:
         self._mouse_prev = [False, False, False, False, False]
         self._mouse_curr = [False, False, False, False, False]
 
+    def reset(self):
+        """Reset input state, clearing mouse button states."""
+        self._mouse_prev = [False] * 5
+        self._mouse_curr = [False] * 5
+
     def update(self, events, dt=None):
         self.mouse_pos   = pygame.mouse.get_pos()
         self._mouse_prev = list(self._mouse_curr)
