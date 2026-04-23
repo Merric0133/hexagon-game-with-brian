@@ -1,0 +1,49 @@
+{
+  "highest_wave": 10,
+  "high_score": 10050,
+  "selected_skin": "gold",
+  "inventory": {
+    "HEART": 3,
+    "MOVE": 2,
+    "DAMAGE": 3,
+    "SHIELD": 1
+  },
+  "equipped": [],
+  "honeycomb_body": [
+    {
+      "q": 1,
+      "r": 0,
+      "type": "HEART"
+    },
+    {
+      "q": 2,
+      "r": 0,
+      "type": "MOVE"
+    },
+    {
+      "q": 3,
+      "r": 0,
+      "type": "DAMAGE"
+    },
+    {
+      "q": 1,
+      "r": 1,
+      "type": "DAMAGE"
+    },
+    {
+      "q": 0,
+      "r": 1,
+      "type": "HEART"
+    },
+    {
+      "q": 1,
+      "r": -1,
+      "type": "HEART"
+    },
+    {
+      "q": -1,
+      "r": 1,
+      "type": "SHIELD"
+    }
+  ]
+}
