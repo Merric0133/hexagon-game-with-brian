@@ -1,0 +1,13 @@
+{
+  "highest_wave": 10,
+  "high_score": 10050,
+  "selected_skin": "gold",
+  "inventory": {
+    "HEART": 3,
+    "MOVE": 1,
+    "DAMAGE": 1,
+    "SHIELD": 0
+  },
+  "equipped": [],
+  "honeycomb_body": []
+}
