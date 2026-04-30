@@ -1,0 +1,37 @@
+{
+  "slot": 2,
+  "race": "Nullborn",
+  "name": "Strain 3",
+  "level": 3,
+  "xp": 312,
+  "cells": [
+    "heart",
+    "basic",
+    "basic",
+    "basic"
+  ],
+  "cell_layout": {},
+  "unlocked_cells": [
+    "basic",
+    "heart",
+    "seeker",
+    "spike",
+    "heart_vorrkai",
+    "heart_skrix",
+    "speedy"
+  ],
+  "current_biome": "membrane",
+  "stats": {
+    "enemies_killed": 16,
+    "bosses_killed": 0,
+    "cells_lost": 0,
+    "absorbed_types": [],
+    "biomes_explored": [],
+    "skrix_shed": 0,
+    "nullborn_phases": 0,
+    "synergies_triggered": 0,
+    "xenarch_defeated": false
+  },
+  "achievements": [],
+  "scale": 1.24
+}
