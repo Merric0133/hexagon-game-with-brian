@@ -492,7 +492,7 @@ class World:
             self.poi_markers.append({
                 "type": "boss_arena",
                 "pos": boss_pos,
-                "radius": 500,
+                "radius": 800,  # Increased from 500 for easier detection
                 "color": q["boss_color"],
                 "label": q["name"].upper() + " BOSS",
                 "quadrant_index": qi,
@@ -584,6 +584,17 @@ class World:
                     self._generate_miniboss_scenery(candidate, q["boss_color"])
                     placed = True
 
+        # ── Xenarch Final Boss Arena (at center, unlocked after all pillars) ────
+        self.poi_markers.append({
+            "type": "xenarch_arena",
+            "pos": (cx, cy),
+            "radius": 1000,
+            "color": (255, 0, 255),
+            "label": "XENARCH",
+            "defeated": False,
+            "locked": True,  # Unlocked when all pillars activated
+        })
+
         # ── Safe zones near spawn ────────────────────────────────────────
         for i in range(4):
             sa = math.radians(i * 90 + 45)
@@ -599,26 +610,13 @@ class World:
             })
 
     def _spawn_initial_enemies(self):
-        # Spawn enemies near every nest across all quadrants
+        # Don't spawn enemies immediately - mark nests for lazy spawning
         nests = [poi for poi in self.poi_markers if poi["type"] == "nest"]
-        enemy_pool = []
-        for biome_data in BIOMES.values():
-            enemy_pool.extend(biome_data["enemy_types"])
-        # Use the world biome's enemy types as the base, supplement with all types
-        biome_types = self.biome["enemy_types"]
         for nest in nests:
-            count = 3 + self.player_level
-            for _ in range(count):
-                etype = random.choice(biome_types)
-                angle = random.uniform(0, math.pi * 2)
-                dist = random.uniform(60, nest["radius"] - 20)
-                pos = (
-                    nest["pos"][0] + math.cos(angle) * dist,
-                    nest["pos"][1] + math.sin(angle) * dist,
-                )
-                e = Enemy(self.space, pos, etype, level=self.player_level,
-                          biome_modifier=self.biome.get("modifier"))
-                self.enemies.append(e)
+            # Fixed 3-5 enemies per nest (no level scaling)
+            count = random.randint(3, 5)
+            nest["pending_enemies"] = count
+            nest["spawned"] = False
 
     def _spawn_cell_drops(self):
         from data.cells_data import CELLS
@@ -664,6 +662,9 @@ class World:
                     self.space.remove(e.body)
         self.enemies = alive_enemies
 
+        # Lazy spawn enemies near player
+        self._spawn_nest_enemies_lazy(player)
+
         self.weather.update(dt, game_time, player, WORLD_SIZE)
 
     def _spawn_wave(self, player):
@@ -700,6 +701,34 @@ class World:
                     best_dist = d
                     best = poi
         return best
+
+    def _spawn_nest_enemies_lazy(self, player):
+        """Spawn enemies for nests only when player is close (lazy loading for optimization)."""
+        from core.utils import distance
+        player_pos = player.get_center()
+        
+        for nest in [poi for poi in self.poi_markers if poi["type"] == "nest"]:
+            # Check if player is within spawn range (1200 units)
+            if distance(player_pos, nest["pos"]) < 1200:
+                # Spawn pending enemies if not already spawned
+                if not nest.get("spawned", False) and nest.get("pending_enemies", 0) > 0:
+                    count = nest["pending_enemies"]
+                    biome_types = self.biome["enemy_types"]
+                    for _ in range(count):
+                        etype = random.choice(biome_types)
+                        angle = random.uniform(0, math.pi * 2)
+                        dist = random.uniform(60, nest["radius"] - 20)
+                        pos = (
+                            nest["pos"][0] + math.cos(angle) * dist,
+                            nest["pos"][1] + math.sin(angle) * dist,
+                        )
+                        e = Enemy(self.space, pos, etype, level=self.player_level,
+                                  biome_modifier=self.biome.get("modifier"))
+                        # Mark which nest this enemy belongs to
+                        e.nest_index = nest.get("nest_index", -1)
+                        self.enemies.append(e)
+                    nest["spawned"] = True
+                    nest["pending_enemies"] = 0
 
     def _on_enemy_death(self, enemy, player):
         player.gain_xp(enemy.xp_value)
@@ -921,6 +950,17 @@ class World:
         self.captured_nests.add(idx)
         # Spawn a cache at this nest now that it's conquered
         self._spawn_cache_at(nest_poi["pos"], nest_poi.get("quadrant_index", 0))
+    
+    def is_nest_cleared(self, nest_poi):
+        """Check if all enemies from a nest have been defeated."""
+        nest_index = nest_poi.get("nest_index", -1)
+        if nest_index == -1:
+            return False
+        # Check if any enemies still belong to this nest
+        for enemy in self.enemies:
+            if getattr(enemy, 'nest_index', -1) == nest_index:
+                return False
+        return True
 
     def _spawn_cache_at(self, pos, quadrant_index):
         """Spawn a cell cache POI and scatter drops around it."""
@@ -984,6 +1024,18 @@ class World:
 
     def all_pillars_activated(self):
         return len(self.pillars_activated) >= 4
+
+    def check_xenarch_arena_entry(self, player_pos):
+        """Check if player entered Xenarch arena (only if all pillars activated)."""
+        if not self.all_pillars_activated():
+            return None
+        for poi in self.poi_markers:
+            if poi["type"] == "xenarch_arena" and not poi.get("defeated", False):
+                dx = poi["pos"][0] - player_pos[0]
+                dy = poi["pos"][1] - player_pos[1]
+                if math.hypot(dx, dy) < poi["radius"]:
+                    return poi
+        return None
 
     def check_miniboss_entry(self, player_pos):
         """Check if player entered a mini-boss domain."""

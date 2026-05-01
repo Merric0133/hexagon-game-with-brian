@@ -2,6 +2,8 @@ import pygame
 import math
 from core.utils import draw_glow_circle, draw_glow_rect, pulse_value, lerp_color, draw_hex
 from core.constants import *
+from core.sounds import play_sound, play_music
+from ui.settings import SettingsMenu
 from data.races_data import RACES as RACE_DATA
 from core.save_manager import load_all_slots, default_strain, NUM_SLOTS
 
@@ -11,13 +13,19 @@ class Button:
         self.text = text
         self.color = color
         self.hovered = False
+        self.was_hovered = False
         self.font = font or pygame.font.SysFont("consolas", 18, bold=True)
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEMOTION:
             self.hovered = self.rect.collidepoint(event.pos)
+            # Play hover sound when transitioning to hovered
+            if self.hovered and not self.was_hovered:
+                play_sound("menu_hover", volume=0.6)
+            self.was_hovered = self.hovered
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.rect.collidepoint(event.pos):
+                play_sound("menu_click", volume=0.7)
                 return True
         return False
 
@@ -43,6 +51,7 @@ class MainMenu:
         self.sw, self.sh = sw, sh
         self.font_title = pygame.font.SysFont("consolas", 64, bold=True)
         self.font_sub    = pygame.font.SysFont("consolas", 18)
+        self.music_started = False
         cx = sw // 2
         self.buttons = {
             "play":   Button((cx-120, sh//2-20, 240, 48), "ENTER XENOVA", NEON_CYAN),
@@ -50,6 +59,8 @@ class MainMenu:
             "achiev": Button((cx-120, sh//2+120, 240, 48), "ACHIEVEMENTS", NEON_GREEN),
             "quit":   Button((cx-120, sh//2+190, 240, 48), "QUIT",         NEON_ORANGE),
         }
+        self.settings = SettingsMenu(sw, sh)
+        self.settings_btn = Button((sw-140, sh-60, 120, 40), "SETTINGS", NEON_CYAN)
         self.bg_orbs = [
             {"pos": (sw*r, sh*r2), "r": r3, "color": c, "phase": p, "spd": s}
             for r, r2, r3, c, p, s in [
@@ -62,12 +73,21 @@ class MainMenu:
         ]
 
     def handle_event(self, event):
+        if self.settings_btn.handle_event(event):
+            self.settings.toggle()
+            return None
         for key, btn in self.buttons.items():
             if btn.handle_event(event):
                 return key
+        self.settings.handle_event(event)
         return None
 
     def draw(self, surface, game_time):
+        # Start music on first draw
+        if not self.music_started:
+            play_music("menu", loops=-1, volume=0.5)
+            self.music_started = True
+        
         surface.fill(DEEP_VOID)
         # Ambient orbs
         for orb in self.bg_orbs:
@@ -89,6 +109,12 @@ class MainMenu:
 
         for btn in self.buttons.values():
             btn.draw(surface, game_time)
+        
+        # Settings button
+        self.settings_btn.draw(surface, game_time)
+        
+        # Settings menu
+        self.settings.draw(surface, game_time)
 
 
 class StrainSelectMenu:

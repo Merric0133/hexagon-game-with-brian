@@ -204,13 +204,54 @@ class Enemy(Creature):
                 and not self.split_spawned
                 and len(self.cells) <= 1)
 
+    def _on_cells_lost(self, lost_cells):
+        """When cells are lost, check if core (heart) was destroyed."""
+        # Check if any lost cell was a heart
+        for cell in lost_cells:
+            if "heart" in cell.cell_type:
+                # Core destroyed - kill all remaining cells
+                for c in self.cells:
+                    c.hp = 0
+                    c.alive = False
+                self.cells = []
+                self.alive = False
+                break
+
     def draw(self, surface, camera, game_time):
         cx, cy = self.get_center()
         sp = camera.world_to_screen(cx, cy)
         
+        # Xenarch aura - MASSIVE intimidating glow
+        if getattr(self, 'is_xenarch', False):
+            pulse = pulse_value(game_time, speed=1.5, lo=0.5, hi=1.0)
+            # Massive outer aura - magenta
+            aura_radius = int(200 * camera.zoom * pulse)
+            draw_glow_circle(surface, (255, 0, 255), sp, aura_radius, alpha=int(100 * pulse), layers=5)
+            # Middle aura - pink
+            aura_radius2 = int(140 * camera.zoom * pulse)
+            draw_glow_circle(surface, (255, 100, 200), sp, aura_radius2, alpha=int(120 * pulse), layers=4)
+            # Inner aura - bright magenta
+            aura_radius3 = int(80 * camera.zoom * pulse)
+            draw_glow_circle(surface, (255, 0, 255), sp, aura_radius3, alpha=int(150 * pulse), layers=3)
+        
+        # Boss aura - massive intimidating glow
+        elif getattr(self, 'is_boss', False):
+            pulse = pulse_value(game_time, speed=2.0, lo=0.6, hi=1.0)
+            # Massive outer aura
+            aura_radius = int(120 * camera.zoom * pulse)
+            draw_glow_circle(surface, (255, 0, 0), sp, aura_radius, alpha=int(80 * pulse), layers=4)
+            # Inner aura
+            aura_radius2 = int(80 * camera.zoom * pulse)
+            draw_glow_circle(surface, (255, 100, 0), sp, aura_radius2, alpha=int(100 * pulse), layers=3)
+        
+        # Mini-boss aura - smaller but still intimidating
+        elif getattr(self, 'is_miniboss', False):
+            pulse = pulse_value(game_time, speed=2.5, lo=0.7, hi=1.0)
+            aura_radius = int(80 * camera.zoom * pulse)
+            draw_glow_circle(surface, (255, 100, 0), sp, aura_radius, alpha=int(70 * pulse), layers=3)
+        
         # Telegraph warning visual
         if self.telegraph_active:
-            from core.utils import pulse_value
             pulse = pulse_value(game_time, speed=8.0, lo=0.4, hi=1.0)
             # Pulsing red glow
             draw_glow_circle(surface, self.telegraph_color, sp, 
@@ -223,6 +264,19 @@ class Enemy(Creature):
         
         # Draw cells
         super().draw(surface, camera, game_time)
+        
+        # Boss/Mini-boss/Xenarch title above
+        if getattr(self, 'boss_title', None):
+            font = pygame.font.SysFont("consolas", max(12, int(16 * camera.zoom)))
+            if getattr(self, 'is_xenarch', False):
+                title_color = (255, 0, 255)
+            elif getattr(self, 'is_miniboss', False):
+                title_color = (255, 100, 0)
+            else:
+                title_color = (255, 0, 0)
+            title_text = font.render(self.boss_title, True, title_color)
+            title_rect = title_text.get_rect(center=(sp[0], sp[1] - int(60 * camera.zoom)))
+            surface.blit(title_text, title_rect)
         
         # Health bar above enemy — only visible when damaged or close
         hp_ratio = self.get_total_biomass() / max(1, self.get_max_biomass())

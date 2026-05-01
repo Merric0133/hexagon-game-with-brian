@@ -56,6 +56,7 @@ STATE_PAUSED       = "paused"
 STATE_GAME_OVER    = "game_over"
 STATE_VICTORY      = "victory"
 STATE_MINIBOSS_CONFIRM = "miniboss_confirm"  # Confirmation dialog before entering mini-boss domain
+STATE_XENARCH_CONFIRM = "xenarch_confirm"  # Confirmation dialog before entering Xenarch realm
 
 # Layers (draw order)
 LAYER_BG      = 0

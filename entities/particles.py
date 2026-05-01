@@ -68,17 +68,18 @@ class ParticleSystem:
             pygame.draw.circle(s, c, (r, r), r)
             surface.blit(s, (sp[0]-r, sp[1]-r))
     
-    def emit_projectile(self, pos, velocity, color, damage, lifetime=3.0, radius=6, glow_color=None):
+    def emit_projectile(self, pos, velocity, color, damage, lifetime=3.0, radius=6, glow_color=None, target_pos=None):
         """Emit an attack projectile.
         
         Args:
             pos: Starting position (x, y)
-            velocity: Velocity vector (vx, vy)
+            velocity: Velocity vector (vx, vy) - ignored if target_pos is provided
             color: RGB color tuple
             damage: Damage dealt on hit
             lifetime: How long projectile lasts
             radius: Visual radius
             glow_color: Glow color (defaults to color)
+            target_pos: If provided, projectile tracks toward this position
         """
         if glow_color is None:
             glow_color = color
@@ -93,12 +94,25 @@ class ParticleSystem:
             "life": lifetime,
             "max_life": lifetime,
             "hit": False,  # Has this projectile hit something?
+            "target_pos": target_pos,  # Track toward this position if set
         })
     
     def update_projectiles(self, dt):
         """Update projectile positions and lifetimes."""
         for proj in self.projectiles:
             proj["life"] -= dt
+            
+            # If tracking a target, update velocity toward it
+            if proj.get("target_pos"):
+                dx = proj["target_pos"][0] - proj["pos"][0]
+                dy = proj["target_pos"][1] - proj["pos"][1]
+                dist = math.hypot(dx, dy)
+                if dist > 0:
+                    # Normalize and apply speed (use magnitude of current velocity as speed)
+                    speed = math.hypot(proj["vel"][0], proj["vel"][1])
+                    proj["vel"][0] = (dx / dist) * speed
+                    proj["vel"][1] = (dy / dist) * speed
+            
             proj["pos"][0] += proj["vel"][0] * dt
             proj["pos"][1] += proj["vel"][1] * dt
         

@@ -74,7 +74,7 @@ class Player(Creature):
             'f': 0.0,  # Rage Mode
         }
         self.ability_durations = {
-            'q': 8.0,   # Dash cooldown
+            'q': 4.0,   # Dash cooldown (was 8.0, now 4.0)
             'e': 12.0,  # Shield Burst cooldown
             'r': 15.0,  # Heal Pulse cooldown
             'f': 20.0,  # Rage Mode cooldown
@@ -254,28 +254,8 @@ class Player(Creature):
         # Generic: activate ability cells
         for cell in self.cells:
             if cell.data.get("ability") and cell.ability_cooldown <= 0:
-                return cell.data["ability"]
-        return None
-        """Called on SPACE press."""
-        race = self.race_name
-        center = self.get_center()
-
-        if race == "Nullborn" and self.phase_cooldown_timer <= 0:
-            self.status_effects["phase"] = PHASE_DURATION
-            self.phase_cooldown_timer = PHASE_COOLDOWN
-            for s in self.shapes:
-                s.filter = pymunk.ShapeFilter(mask=0)  # intangible
-            return "phase"
-
-        if race == "Lumenid":
-            return "photon_burst"
-
-        if race == "Skrix":
-            return "fission"
-
-        # Generic: activate ability cells
-        for cell in self.cells:
-            if cell.data.get("ability") and cell.ability_cooldown <= 0:
+                # Set cooldown on the cell (5 second cooldown)
+                cell.ability_cooldown = 5.0
                 return cell.data["ability"]
         return None
 

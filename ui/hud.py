@@ -173,7 +173,7 @@ class HUD:
         surface.blit(txt, (self.sw - txt.get_width() - 20, self.sh - 30))
 
     def _draw_notifications(self, surface, game_time):
-        y = self.sh // 2 - 60
+        y = 20  # Move to top of screen
         for n in self.notifications:
             alpha = min(255, int(255 * (n["timer"] / n["max_timer"]) * 2))
             alpha = min(255, alpha)

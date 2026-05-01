@@ -8,7 +8,7 @@ from core.save_manager import (load_all_slots, save_slot, delete_slot,
                                 default_strain, load_global_achievements,
                                 save_global_achievements, NUM_SLOTS)
 from core.world import World
-from core.sound_manager import init_sounds, play_sound, play_music, stop_music
+from core.sounds import play_sound, play_music, stop_music
 from entities.player import Player
 from entities.particles import ParticleSystem
 from ui.hud import HUD
@@ -26,9 +26,6 @@ class Game:
         self.state = STATE_MAIN_MENU
         self.game_time = 0.0
         self.dt = 0.0
-
-        # Initialize sound system (disabled for now - waiting for soundeffects folder)
-        init_sounds(enabled=False)
 
         # Physics
         self.space = pymunk.Space()
@@ -61,12 +58,21 @@ class Game:
         # Boss / fast-travel state
         self._boss_active         = False
         self._current_boss_domain = None
+        self._xenarch_unlocked    = False
+        self._xenarch_active      = False
+        self._xenarch_spawn_frame = 0
+        self._current_xenarch_domain = None
+        self._xenarch_realm       = False
         self._fast_travel_target  = None
         self._fast_travel_timer   = 0.0
         
         # Mini-boss confirmation dialog
         self._miniboss_confirm_domain = None
         self._miniboss_confirm_timer = 0.0
+        
+        # Xenarch confirmation dialog
+        self._xenarch_confirm_domain = None
+        self._xenarch_confirm_timer = 0.0
 
         # Achievements
         self.global_achievements = load_global_achievements()
@@ -85,6 +91,9 @@ class Game:
         self.map_open = False
         self.map_font = pygame.font.SysFont("consolas", 14, bold=True)
         self.map_font_small = pygame.font.SysFont("consolas", 11)
+        
+        # Cheat code tracking
+        self.cheat_keys = []
 
     def _setup_collisions(self):
         self.space.on_collision(1, 2, begin=self._on_player_enemy_collision)
@@ -158,6 +167,20 @@ class Game:
                 import sys; sys.exit()
 
             if event.type == pygame.KEYDOWN:
+                # Cheat code: GODMODE (press G, O, D in sequence)
+                if event.key == pygame.K_g:
+                    self.cheat_keys = [pygame.K_g]
+                elif event.key == pygame.K_o and self.cheat_keys == [pygame.K_g]:
+                    self.cheat_keys.append(pygame.K_o)
+                elif event.key == pygame.K_d and self.cheat_keys == [pygame.K_g, pygame.K_o]:
+                    self.cheat_keys.append(pygame.K_d)
+                    # Activate godmode!
+                    if self.player and self.state == STATE_GAME:
+                        self._activate_godmode()
+                    self.cheat_keys = []
+                else:
+                    self.cheat_keys = []
+                
                 if event.key == pygame.K_ESCAPE:
                     self._handle_escape()
                 if event.key == pygame.K_TAB and self.state == STATE_GAME:
@@ -276,10 +299,14 @@ class Game:
             elif self.state == STATE_EDITOR:
                 result = self.editor.handle_event(event)
                 if result == "back":
-                    self.state = STATE_GAME if self.player else STATE_STRAIN_SELECT
+                    self.state = STATE_GAME if (self.player and self.world) else STATE_STRAIN_SELECT
                 elif result == "play":
                     self._apply_editor_layout()
-                    self.state = STATE_GAME
+                    if self.player and self.world:
+                        self.state = STATE_GAME
+                    else:
+                        # Fallback if world isn't set up
+                        self.state = STATE_STRAIN_SELECT
 
             elif self.state == STATE_XENOPEDIA:
                 result = self.xenopedia.handle_event(event)
@@ -316,6 +343,8 @@ class Game:
 
             elif self.state == STATE_VICTORY:
                 if event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.KEYDOWN:
+                    stop_music()
+                    play_music("menu", loops=-1, volume=0.5)
                     self.state = STATE_STRAIN_SELECT
                     self.strain_menu.refresh()
             
@@ -348,6 +377,55 @@ class Game:
                         self.state = STATE_GAME
                         self._miniboss_confirm_domain = None
 
+            elif self.state == STATE_XENARCH_CONFIRM:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                        # Confirm - enter Xenarch realm
+                        self._current_xenarch_domain = self._xenarch_confirm_domain
+                        self._spawn_xenarch(self._xenarch_confirm_domain)
+                        self.state = STATE_GAME
+                        self._xenarch_confirm_domain = None
+                    elif event.key == pygame.K_ESCAPE:
+                        # Cancel - push player back and go back to game
+                        # Push player away from center
+                        px, py = self.player.get_center()
+                        from core.world import WORLD_SIZE
+                        center = WORLD_SIZE / 2
+                        dx = px - center
+                        dy = py - center
+                        dist = math.hypot(dx, dy)
+                        if dist > 0:
+                            push_dist = 500
+                            self.player.body.position = (center + (dx/dist)*push_dist, center + (dy/dist)*push_dist)
+                            self.player.body.velocity = (0, 0)
+                        self.state = STATE_GAME
+                        self._xenarch_confirm_domain = None
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    # Check button clicks
+                    mx, my = event.pos
+                    cx = self.sw // 2
+                    # Confirm button
+                    if pygame.Rect(cx-100, self.sh//2+40, 200, 44).collidepoint(mx, my):
+                        self._current_xenarch_domain = self._xenarch_confirm_domain
+                        self._spawn_xenarch(self._xenarch_confirm_domain)
+                        self.state = STATE_GAME
+                        self._xenarch_confirm_domain = None
+                    # Cancel button
+                    elif pygame.Rect(cx-100, self.sh//2+100, 200, 44).collidepoint(mx, my):
+                        # Push player back
+                        px, py = self.player.get_center()
+                        from core.world import WORLD_SIZE
+                        center = WORLD_SIZE / 2
+                        dx = px - center
+                        dy = py - center
+                        dist = math.hypot(dx, dy)
+                        if dist > 0:
+                            push_dist = 500
+                            self.player.body.position = (center + (dx/dist)*push_dist, center + (dy/dist)*push_dist)
+                            self.player.body.velocity = (0, 0)
+                        self.state = STATE_GAME
+                        self._xenarch_confirm_domain = None
+
     def _handle_escape(self):
         if self.state == STATE_GAME:
             self.state = STATE_PAUSED
@@ -356,6 +434,9 @@ class Game:
         elif self.state in (STATE_EDITOR, STATE_XENOPEDIA, STATE_ACHIEVEMENTS,
                             STATE_STRAIN_SELECT, STATE_RACE_SELECT):
             self.state = STATE_MAIN_MENU
+            # Switch music back to main menu when exiting gameplay
+            stop_music()
+            play_music("menu", loops=-1, volume=0.5)
 
     def _load_strain(self, slot, strain_data):
         self.active_slot = slot
@@ -369,6 +450,31 @@ class Game:
         biome = strain_data.get("current_biome", "membrane")
         level = strain_data.get("level", 1)
         self.world = World(self.space, biome, level)
+        
+        # Load boss progression from save data
+        boss_progress = strain_data.get("boss_progress", {})
+        for poi in self.world.poi_markers:
+            if poi["type"] in ("boss_arena", "miniboss_domain"):
+                key = f"{poi['type']}_{poi.get('quadrant_index', 0)}"
+                if key in boss_progress:
+                    poi["defeated"] = boss_progress[key]
+        
+        # Load pillar activation status
+        pillars_activated = strain_data.get("pillars_activated", [])
+        self.world.pillars_activated = set(pillars_activated)
+        for poi in self.world.poi_markers:
+            if poi["type"] == "pillar":
+                qi = poi.get("quadrant_index", 0)
+                if qi in self.world.pillars_activated:
+                    poi["activated"] = True
+        
+        # Load Xenarch status
+        xenarch_defeated = strain_data.get("xenarch_defeated", False)
+        for poi in self.world.poi_markers:
+            if poi["type"] == "xenarch_arena":
+                poi["defeated"] = xenarch_defeated
+                break
+        
         from core.world import WORLD_SIZE
         center = WORLD_SIZE / 2
         self.player = Player(self.space, (center, center), strain_data)
@@ -384,6 +490,29 @@ class Game:
         # Boss tracking
         self._current_boss_domain = None
         self._boss_active = False
+        self._xenarch_unlocked = False
+        self._xenarch_active = False
+        self._xenarch_spawn_frame = 0
+        self._current_xenarch_domain = None
+        self._xenarch_realm = False
+        self._xenarch_confirm_domain = None
+        self._xenarch_confirm_timer = 0.0
+        
+        # Check if all pillars are activated and Xenarch not defeated
+        if self.world.all_pillars_activated() and not xenarch_defeated:
+            self._xenarch_unlocked = True
+            # Show confirmation immediately when loading
+            xenarch_poi = None
+            for poi in self.world.poi_markers:
+                if poi["type"] == "xenarch_arena":
+                    xenarch_poi = poi
+                    break
+            if xenarch_poi:
+                self._xenarch_confirm_domain = xenarch_poi
+                self.state = STATE_XENARCH_CONFIRM
+        else:
+            self.state = STATE_EDITOR
+        
         # Show tutorial for new strains (level 1, no prior play)
         if strain_data.get("level", 1) == 1 and strain_data.get("stats", {}).get("enemies_killed", 0) == 0:
             self.tutorial = Tutorial(self.sw, self.sh)
@@ -392,9 +521,7 @@ class Game:
         
         # Start game loop music
         stop_music()
-        play_music("house_lo.mp3", loops=-1, volume=0.5)
-        
-        self.state = STATE_EDITOR
+        play_music("game_loop", loops=-1, volume=0.5)
 
     def _cleanup_world(self):
         if self.world:
@@ -420,27 +547,37 @@ class Game:
             self.state = STATE_EDITOR
 
     def _apply_editor_layout(self):
-        if not self.player or not self.editor:
+        if not self.player or not self.editor or not self.world:
             return
-        new_layout = self.editor.get_layout()
-        # Rebuild player with new layout
-        strain = self.player.to_save_data()
-        layout_serialized = {"{},{}".format(k[0], k[1]): v for k, v in new_layout.items()}
-        strain["cell_layout"] = layout_serialized
-        # Remove old player physics
-        for s in self.player.shapes:
-            if s in self.space.shapes:
-                self.space.remove(s)
-        if self.player.body in self.space.bodies:
-            self.space.remove(self.player.body)
-        pos = self.player.get_center()
-        self.player = Player(self.space, pos, strain)
-        self.camera.set_zoom_for_scale(self.player.scale)
+        try:
+            new_layout = self.editor.get_layout()
+            # Rebuild player with new layout
+            strain = self.player.to_save_data()
+            layout_serialized = {"{},{}".format(k[0], k[1]): v for k, v in new_layout.items()}
+            strain["cell_layout"] = layout_serialized
+            # Remove old player physics
+            for s in self.player.shapes:
+                if s in self.space.shapes:
+                    self.space.remove(s)
+            if self.player.body in self.space.bodies:
+                self.space.remove(self.player.body)
+            pos = self.player.get_center()
+            self.player = Player(self.space, pos, strain)
+            self.camera.set_zoom_for_scale(self.player.scale)
+        except Exception as e:
+            print(f"Error applying editor layout: {e}")
+            # Fallback: just return to game without changes
+            pass
 
     def _handle_ability(self, result):
         if not result or not self.player:
             return
         cx, cy = self.player.get_center()
+        
+        # Get mouse position for projectile tracking
+        mouse_pos = pygame.mouse.get_pos()
+        mouse_world = self.camera.screen_to_world(*mouse_pos)
+        
         if result == "photon_burst":
             self.particles.emit((cx, cy), (255, 255, 200), count=30, speed=300)
             self.camera.shake(5.0)
@@ -449,15 +586,27 @@ class Game:
                 if distance((cx,cy), e.get_center()) < 200:
                     e.status_effects["blinded"] = 1.5
         elif result == "zap":
+            play_sound("zap", volume=0.8)
             self.particles.emit_zap((cx, cy))
             self.camera.shake(3.0)
+            # Spawn projectiles in all directions, tracking mouse
+            import math
+            for i in range(6):
+                angle = (i / 6) * math.pi * 2
+                vel_x = math.cos(angle) * 250
+                vel_y = math.sin(angle) * 250
+                self.particles.emit_projectile((cx, cy), (vel_x, vel_y), 
+                                              (180, 80, 255), damage=25, lifetime=1.5, 
+                                              radius=6, glow_color=(200, 120, 255),
+                                              target_pos=mouse_world)
+            # Also damage nearby enemies
             for e in (self.world.enemies if self.world else []):
                 from core.utils import distance
                 if distance((cx,cy), e.get_center()) < 150:
                     e.take_damage(25, (cx,cy))
                     self.particles.emit_zap(e.get_center())
         elif result == "explode":
-            # Fire projectiles in all directions
+            # Fire projectiles in all directions, tracking mouse
             play_sound("explosion", volume=0.9)
             self.particles.emit_explosion((cx,cy), (255,100,0))
             self.camera.shake(12.0)
@@ -467,10 +616,10 @@ class Game:
                 angle = (i / 8) * math.pi * 2
                 vel_x = math.cos(angle) * 300
                 vel_y = math.sin(angle) * 300
-                play_sound("projectile", volume=0.5)
                 self.particles.emit_projectile((cx, cy), (vel_x, vel_y), 
                                               (255, 100, 0), damage=40, lifetime=2.0, 
-                                              radius=8, glow_color=(255, 150, 0))
+                                              radius=8, glow_color=(255, 150, 0),
+                                              target_pos=mouse_world)
         elif result == "fission":
             # Shed outermost cell
             if len(self.player.cells) > 1:
@@ -492,6 +641,7 @@ class Game:
                         biome_modifier=None)
         # Make it cracked — boost stats (but weaker than real mini-bosses)
         miniboss.scale = 1.6
+        miniboss.boss_title = "TUTORIAL BOSS"
         for cell in miniboss.cells:
             cell.hp = int(cell.hp * 2.0)
             cell.max_hp = int(cell.max_hp * 2.0)
@@ -517,12 +667,14 @@ class Game:
                         biome_modifier=None)
         
         # Make it ABSOLUTELY BRUTAL
-        miniboss.scale = 3.2  # HUGE scale
+        miniboss.scale = 4.0  # HUGE scale (was 3.2, now 4.0)
         for cell in miniboss.cells:
             cell.hp = int(cell.hp * 9.0)  # MASSIVE HP multiplier
             cell.max_hp = int(cell.max_hp * 9.0)
         miniboss.xp_value = int(miniboss.xp_value * 10)  # HUGE XP reward
         miniboss.is_miniboss = True  # Flag for tracking
+        miniboss.boss_title = domain.get("name", "MINI BOSS").upper()
+        
         # Faster telegraphs for mini-bosses
         miniboss.telegraph_duration = 0.4  # Even faster
         miniboss.telegraph_color = (255, 0, 0)  # Bright red for danger
@@ -531,9 +683,9 @@ class Game:
         self._miniboss_active = True
         
         if self.hud:
-            self.hud.notify(domain['name'] + " AWAKENS!", domain["color"], duration=4.0)
+            self.hud.notify(f"⚠️ {domain.get('name', 'MINI BOSS')} APPEARS ⚠️", domain["color"], duration=4.0)
             self.hud.notify("Reward: " + domain['reward_desc'], (255, 220, 0), duration=5.0)
-            self.hud.notify("⚠️ EXTREME THREAT ⚠️", (255, 0, 0), duration=3.0)
+            self.hud.notify("🔥 EXTREME THREAT 🔥", (255, 0, 0), duration=3.0)
         
         self.camera.shake(20.0)
         self.particles.emit(boss_pos, domain["color"], count=80, speed=400)
@@ -545,28 +697,119 @@ class Game:
         from entities.enemy import Enemy
         from data.biomes_data import BIOMES
 
+        # Spawn boss in the middle of the domain (not near player)
         boss_pos = domain["pos"]
+        
         biome_key = domain.get("biome", "membrane")
         biome_data = BIOMES.get(biome_key, BIOMES["membrane"])
-        # Pick the toughest enemy type from the biome
-        enemy_types = biome_data["enemy_types"]
-        boss_type = enemy_types[-1] if enemy_types else "armored_brute"
+        
+        # Create unique boss layouts based on biome
+        if biome_key == "membrane":
+            # Membrane Boss: Tanky brute with lots of spikes
+            boss_layout = {
+                (0, 0): "heart",
+                (-1, 0): "spike", (1, 0): "spike",
+                (0, -1): "spike", (0, 1): "spike",
+                (-1, -1): "hard", (1, 1): "hard",
+                (-2, 0): "shield", (2, 0): "shield",
+            }
+            boss_type = "armored_brute"
+        elif biome_key == "vein":
+            # Vein Boss: Swift and aggressive with speed
+            boss_layout = {
+                (0, 0): "heart_vorrkai",
+                (-1, 0): "spike", (1, 0): "spike",
+                (0, -1): "speedy", (0, 1): "speedy",
+                (-1, -1): "speedy", (1, 1): "speedy",
+                (-2, 0): "bouncer", (2, 0): "bouncer",
+            }
+            boss_type = "hunter"
+        elif biome_key == "cortex":
+            # Cortex Boss: Psychic with ranged attacks
+            boss_layout = {
+                (0, 0): "heart_lumenid",
+                (-1, 0): "zapper", (1, 0): "zapper",
+                (0, -1): "zapper", (0, 1): "zapper",
+                (-1, -1): "hard", (1, 1): "hard",
+                (-2, 0): "shield", (2, 0): "shield",
+            }
+            boss_type = "psychic_weaver"
+        elif biome_key == "void_stomach":
+            # Void Boss: Chaotic with acid and explosives
+            boss_layout = {
+                (0, 0): "heart_nullborn",
+                (-1, 0): "explosive", (1, 0): "explosive",
+                (0, -1): "acid", (0, 1): "acid",
+                (-1, -1): "hard", (1, 1): "hard",
+                (-2, 0): "shield", (2, 0): "shield",
+            }
+            boss_type = "hive_cluster"
+        else:
+            # Default/Xenarch: Balanced and deadly
+            boss_layout = {
+                (0, 0): "heart_myrrhon",
+                (-1, 0): "spike", (1, 0): "spike",
+                (0, -1): "zapper", (0, 1): "explosive",
+                (-1, -1): "hard", (1, 1): "hard",
+                (-2, 0): "shield", (2, 0): "shield",
+            }
+            boss_type = "mimic"
 
         # Create INSANELY powerful world boss (much stronger than mini-boss)
         boss = Enemy(self.space, boss_pos, boss_type,
                      level=self.player.level + 18,  # MASSIVE level (vs mini-boss +10)
                      biome_modifier=biome_data.get("modifier"))
-        boss.scale = 4.5  # ENORMOUS (vs mini-boss 3.2)
+        
+        # Override with custom layout
+        boss.cell_layout = {}
+        boss.cells = []
+        for (col, row), cell_type in boss_layout.items():
+            from entities.cell import Cell
+            cell = Cell(cell_type, col, row, owner=boss)
+            boss.cell_layout[(col, row)] = cell
+            boss.cells.append(cell)
+        boss._rebuild_physics()
+        
+        boss.scale = 6.0  # EVEN MORE ENORMOUS
         for cell in boss.cells:
-            cell.hp = int(cell.hp * 15.0)  # INSANE HP (vs mini-boss 9.0)
+            cell.hp = int(cell.hp * 15.0)  # INSANE HP
             cell.max_hp = int(cell.max_hp * 15.0)
-        boss.xp_value = int(boss.xp_value * 25)  # MASSIVE XP (vs mini-boss 10)
+        boss.xp_value = int(boss.xp_value * 25)  # MASSIVE XP
         boss.is_boss = True
+        # Use biome name as boss title
+        boss.boss_title = domain.get("name", "BOSS").upper()
+        
+        # Assign unique boss characteristics based on biome
+        if biome_key == "membrane":
+            boss.boss_archetype = "brute"  # Slow, tanky
+            boss.telegraph_duration = 0.5
+            boss.attack_cooldown = 1.5  # More aggressive
+            boss.ai_state = "chase"  # Always chase
+        elif biome_key == "vein":
+            boss.boss_archetype = "swift"  # Fast, aggressive
+            boss.telegraph_duration = 0.25
+            boss.attack_cooldown = 0.8  # Very aggressive
+            boss.ai_state = "chase"  # Always chase
+        elif biome_key == "cortex":
+            boss.boss_archetype = "psychic"  # Ranged, tactical
+            boss.telegraph_duration = 0.4
+            boss.attack_cooldown = 1.2  # Aggressive ranged
+            boss.ai_state = "ranged"  # Use ranged attacks
+        elif biome_key == "void_stomach":
+            boss.boss_archetype = "void"  # Chaotic, unpredictable
+            boss.telegraph_duration = 0.3
+            boss.attack_cooldown = 1.0  # Very aggressive
+            boss.ai_state = "chase"  # Always chase
+        else:  # inferno/xenarch
+            boss.boss_archetype = "infernal"  # Balanced, deadly
+            boss.telegraph_duration = 0.35
+            boss.attack_cooldown = 0.7  # Extremely aggressive
+            boss.ai_state = "chase"  # Always chase
         
         # World boss is AGGRESSIVE
-        boss.telegraph_duration = 0.35  # Even faster attacks
         boss.telegraph_color = (255, 0, 0)  # Bright red
-        boss.attack_cooldown = 0.5  # Attacks frequently
+        boss.arch_data["aggro_range"] = 5000  # Huge aggro range - always sees player
+        boss.arch_data["speed"] = 150  # Fast movement
         
         # Store boss type for reward
         boss.boss_type = boss_type
@@ -577,11 +820,114 @@ class Game:
         self.world.miniboss_active = True  # Suppress ambient visuals
 
         if self.hud:
-            self.hud.notify(domain["label"] + " AWAKENS!", domain["color"], duration=5.0)
-            self.hud.notify("⚠️ WORLD BOSS ⚠️", (255, 0, 0), duration=4.0)
-            self.hud.notify("Defeat it to activate a PILLAR!", (255, 255, 100), duration=5.0)
+            self.hud.notify(f"⚠️ {domain.get('name', 'BOSS')} AWAKENS ⚠️", domain["color"], duration=4.0)
+            if domain.get('reward_desc'):
+                self.hud.notify("Reward: " + domain['reward_desc'], (255, 220, 0), duration=5.0)
+            self.hud.notify("🔥 EXTREME THREAT 🔥", (255, 0, 0), duration=3.0)
+        
+        self.camera.shake(20.0)
+        self.particles.emit(boss_pos, domain["color"], count=80, speed=400)
+
+    def _spawn_xenarch(self, domain):
+        """Spawn XENARCH, the ultimate final boss."""
+        if not self.world or not self.player:
+            print(f"DEBUG: Cannot spawn Xenarch - world: {self.world}, player: {self.player}")
+            return
+        from entities.enemy import Enemy
+        
+        print(f"DEBUG: Spawning Xenarch - world exists: {self.world is not None}")
+        print(f"DEBUG: World enemies list before: {len(self.world.enemies)}")
+        
+        # Mark that we're in Xenarch realm
+        self._xenarch_realm = True
+        
+        # Teleport player to center with warning
+        from core.world import WORLD_SIZE
+        center = WORLD_SIZE / 2
+        self.player.body.position = (center, center)
+        self.player.body.velocity = (0, 0)
+        self.camera.x = center - self.sw / 2
+        self.camera.y = center - self.sh / 2
+        
+        # Spawn Xenarch offset from center (not on top of player)
+        xenarch_pos = (center, center - 600)  # Spawn 600 units above
+        
+        # XENARCH: The ultimate build - best of all biomes combined
+        xenarch_layout = {
+            # Core: Myrrhon heart (balanced)
+            (0, 0): "heart_myrrhon",
+            # Inner ring: Offensive powerhouses
+            (-1, 0): "spike", (1, 0): "spike",
+            (0, -1): "zapper", (0, 1): "explosive",
+            # Middle ring: Defensive + utility
+            (-1, -1): "hard", (1, 1): "hard",
+            (-1, 1): "shield", (1, -1): "bouncer",
+            # Outer ring: Maximum coverage
+            (-2, 0): "spike", (2, 0): "spike",
+            (0, -2): "zapper", (0, 2): "explosive",
+            (-2, -1): "hard", (2, 1): "hard",
+            (-2, 1): "shield", (2, -1): "bouncer",
+        }
+        
+        xenarch = Enemy(self.space, xenarch_pos, "mimic",
+                       level=self.player.level + 20,  # Slightly above pillar bosses (which are +18)
+                       biome_modifier=None)
+        
+        # Override with ultimate layout
+        xenarch.cell_layout = {}
+        xenarch.cells = []
+        for (col, row), cell_type in xenarch_layout.items():
+            from entities.cell import Cell
+            cell = Cell(cell_type, col, row, owner=xenarch)
+            xenarch.cell_layout[(col, row)] = cell
+            xenarch.cells.append(cell)
+        xenarch._rebuild_physics()
+        xenarch._check_synergies()
+        xenarch.alive = True  # Ensure alive is set to True
+        
+        print(f"DEBUG: Xenarch created with {len(xenarch.cells)} cells")
+        print(f"DEBUG: Xenarch alive: {xenarch.alive}")
+        
+        # MASSIVE scale - visibly intimidating
+        xenarch.scale = 8.0
+        for cell in xenarch.cells:
+            cell.hp = int(cell.hp * 30.0)  # 2x stronger than pillar bosses (which are 15x)
+            cell.max_hp = int(cell.max_hp * 30.0)
+        xenarch.xp_value = int(xenarch.xp_value * 40)  # 2x reward (pillar bosses are 20x)
+        
+        # Mark as Xenarch
+        xenarch.is_xenarch = True
+        xenarch.boss_title = "XENARCH"
+        xenarch.telegraph_color = (255, 0, 255)  # Magenta
+        
+        # Ultimate AI - extremely aggressive
+        xenarch.telegraph_duration = 0.2  # Barely any warning
+        xenarch.attack_cooldown = 1.5  # Less frequent attacks (was 0.5)
+        xenarch.ai_state = "chase"  # Always chasing
+        # Override arch_data to make him aggressive
+        xenarch.arch_data["aggro_range"] = 5000  # Huge aggro range - always sees player
+        xenarch.arch_data["speed"] = 120  # Fast but not insanely fast (was 200)
+        
+        self.world.enemies.append(xenarch)
+        self._xenarch_active = True
+        self._xenarch_spawn_frame = 0  # Prevent victory check on spawn frame
+        self.world.miniboss_active = True
+        
+        print(f"DEBUG: After append - enemies in world: {len(self.world.enemies)}")
+        print(f"DEBUG: Xenarch in list: {xenarch in self.world.enemies}")
+        print(f"DEBUG: Xenarch is_xenarch flag: {getattr(xenarch, 'is_xenarch', False)}")
+        
+        # Play Xenarch's theme music
+        stop_music()
+        play_music("xenarch", loops=-1, volume=0.6)
+        
+        if self.hud:
+            self.hud.notify("⚠️ XENARCH EMERGES ⚠️", (255, 0, 255), duration=5.0)
+            self.hud.notify("THE ARCHITECT OF XENOVA ITSELF", (255, 100, 255), duration=5.0)
+            self.hud.notify("🔥 ULTIMATE THREAT 🔥", (255, 0, 255), duration=4.0)
+        
         self.camera.shake(30.0)
-        self.particles.emit(boss_pos, domain["color"], count=120, speed=500)
+        self.particles.emit(xenarch_pos, (255, 0, 255), count=150, speed=500)
 
     def _handle_pause_click(self, pos):
         cx = self.sw // 2
@@ -597,6 +943,22 @@ class Game:
     def _save_current(self):
         if self.player and self.active_slot is not None:
             data = self.player.to_save_data()
+            # Save world state (boss progression and pillars)
+            if self.world:
+                # Save defeated status of all bosses and mini-bosses
+                boss_progress = {}
+                for poi in self.world.poi_markers:
+                    if poi["type"] in ("boss_arena", "miniboss_domain"):
+                        key = f"{poi['type']}_{poi.get('quadrant_index', 0)}"
+                        boss_progress[key] = poi.get("defeated", False)
+                data["boss_progress"] = boss_progress
+                # Save pillar activation status
+                data["pillars_activated"] = list(self.world.pillars_activated)
+                # Save Xenarch status
+                for poi in self.world.poi_markers:
+                    if poi["type"] == "xenarch_arena":
+                        data["xenarch_defeated"] = poi.get("defeated", False)
+                        break
             save_slot(self.active_slot, data)
         save_global_achievements(self.global_achievements)
 
@@ -694,22 +1056,15 @@ class Game:
                 self.camera.shake(15.0)
                 self._miniboss_active = False
                 self.world.miniboss_active = False
-                del self._current_miniboss_domain
+                self._current_miniboss_domain = None
 
         # Check boss arena entry
         boss_domain = self.world.check_boss_arena_entry(self.player.get_center())
-        if boss_domain and not self._boss_active and not hasattr(self, '_current_boss_domain'):
-            # Check if all mini-bosses defeated
-            miniboss_count = sum(1 for poi in self.world.poi_markers 
-                                if poi["type"] == "miniboss_domain" and poi.get("defeated", False))
-            if miniboss_count >= 4:
-                # All mini-bosses defeated, can fight world boss
-                self._current_boss_domain = boss_domain
-                self._spawn_quadrant_boss(boss_domain)
-            else:
-                # Not ready yet
-                if self.hud:
-                    self.hud.notify(f"Defeat all mini-bosses first! ({miniboss_count}/4)", (255, 100, 100), duration=3.0)
+        if boss_domain and not self._boss_active and self._current_boss_domain is None:
+            # Spawn boss immediately when entering domain
+            print(f"DEBUG: Boss arena detected! Spawning {boss_domain.get('name', 'BOSS')}")
+            self._current_boss_domain = boss_domain
+            self._spawn_quadrant_boss(boss_domain)
 
         # Check if quadrant boss defeated
         if self._boss_active and not any(getattr(e, 'is_boss', False) for e in self.world.enemies):
@@ -727,9 +1082,35 @@ class Game:
             self.camera.shake(20.0)
             self._boss_active = False
             self.world.miniboss_active = False
-            del self._current_boss_domain
-            # Check victory
-            if self.world.all_pillars_activated():
+            self._current_boss_domain = None
+            # Check if all pillars activated - if so, unlock Xenarch
+            if self.world.all_pillars_activated() and not self._xenarch_unlocked:
+                self._xenarch_unlocked = True
+                self.hud.notify("⚠️ ALL PILLARS AWAKENED ⚠️", (255, 0, 255), duration=4.0)
+                self.hud.notify("A PRESENCE STIRS AT THE CENTER...", (255, 100, 255), duration=4.0)
+
+        # Check Xenarch arena entry (only if unlocked)
+        if self._xenarch_unlocked and not self._xenarch_active:
+            xenarch_domain = self.world.check_xenarch_arena_entry(self.player.get_center())
+            if xenarch_domain and self._current_xenarch_domain is None:
+                print(f"DEBUG: Xenarch arena detected! Showing confirmation")
+                self._xenarch_confirm_domain = xenarch_domain
+                self.state = STATE_XENARCH_CONFIRM
+                self._xenarch_confirm_timer = 0.0
+
+        # Check if Xenarch defeated
+        if self._xenarch_active:
+            self._xenarch_spawn_frame += 1
+            xenarch_count = sum(1 for e in self.world.enemies if getattr(e, 'is_xenarch', False))
+            if self._xenarch_spawn_frame == 2:
+                print(f"DEBUG: Frame 2 - Xenarch count: {xenarch_count}, Total enemies: {len(self.world.enemies)}")
+            if self._xenarch_spawn_frame > 1 and xenarch_count == 0:
+                print(f"DEBUG: Xenarch defeated! Frame: {self._xenarch_spawn_frame}")
+                self._xenarch_active = False
+                self._xenarch_realm = False
+                self.world.miniboss_active = False
+                self._current_xenarch_domain = None
+                stop_music()
                 play_sound("victory", volume=0.9)
                 self.state = STATE_VICTORY
 
@@ -749,6 +1130,7 @@ class Game:
         if hasattr(self.player, '_cells_lost_this_frame'):
             for cell in self.player._cells_lost_this_frame:
                 self.particles.emit_cell_death(cell.world_pos, cell.data["glow"])
+                play_sound("shatter", volume=0.6)
                 self.camera.shake(8.0)
             del self.player._cells_lost_this_frame
 
@@ -822,6 +1204,10 @@ class Game:
         elif self.state == STATE_MINIBOSS_CONFIRM:
             self._draw_game()
             self._draw_miniboss_confirm()
+        
+        elif self.state == STATE_XENARCH_CONFIRM:
+            self._draw_game()
+            self._draw_xenarch_confirm()
 
     def _draw_game(self):
         if not self.world or not self.player:
@@ -838,12 +1224,42 @@ class Game:
         self.world.draw_weather_hud(self.screen, weather_font, self.sw, self.sh, self.game_time)
         self._draw_minimap()
         
+        # Nest status indicator
+        if self.world and self.player:
+            nearest_nest = self.world._nearest_nest(self.player)
+            if nearest_nest:
+                is_cleared = self.world.is_nest_cleared(nearest_nest)
+                status_font = pygame.font.SysFont("consolas", 14, bold=True)
+                status_color = (0, 255, 100) if is_cleared else (255, 100, 100)
+                status_text = "NEST: CLEARED" if is_cleared else "NEST: ACTIVE"
+                status = status_font.render(status_text, True, status_color)
+                self.screen.blit(status, (20, 20))
+        
         # Boss proximity warning
         self._draw_boss_proximity_warning()
         
         # Full map overlay
         if self.map_open:
             self._draw_full_map()
+        
+        # Xenarch realm visual - fiery red atmosphere
+        if self._xenarch_realm:
+            from core.utils import pulse_value
+            pulse = pulse_value(self.game_time, speed=2.0, lo=0.3, hi=0.7)
+            
+            # Fiery red vignette overlay
+            vignette = pygame.Surface((self.sw, self.sh), pygame.SRCALPHA)
+            # Red/orange gradient vignette
+            alpha = int(80 * pulse)
+            pygame.draw.circle(vignette, (200, 50, 0, alpha), (self.sw//2, self.sh//2),
+                             max(self.sw, self.sh), width=self.sw//2)
+            self.screen.blit(vignette, (0, 0))
+            
+            # Pulsing red glow at edges
+            edge_glow = pygame.Surface((self.sw, self.sh), pygame.SRCALPHA)
+            glow_alpha = int(40 * pulse)
+            pygame.draw.rect(edge_glow, (255, 80, 0, glow_alpha), (0, 0, self.sw, self.sh))
+            self.screen.blit(edge_glow, (0, 0))
         
         if self.tutorial and self.tutorial.active:
             self.tutorial.draw(self.screen, self.game_time)
@@ -872,7 +1288,13 @@ class Game:
                     pygame.draw.circle(mm_surf, (*color, 120), (mx, my), max(2, r))
                     pygame.draw.circle(mm_surf, color, (mx, my), max(2, r), width=1)
                 elif poi["type"] == "nest":
-                    color = (0, 255, 180) if poi.get("captured") else (*poi["color"], 80)
+                    # Show cleared nests in green, active in red, captured in cyan
+                    if poi.get("captured"):
+                        color = (0, 255, 180)
+                    elif self.world.is_nest_cleared(poi):
+                        color = (0, 255, 100)  # Green for cleared
+                    else:
+                        color = (*poi["color"], 80)  # Red for active
                     if isinstance(color, tuple) and len(color) == 4:
                         pygame.draw.circle(mm_surf, color, (mx, my), max(1, r))
                     else:
@@ -947,11 +1369,56 @@ class Game:
         self.screen.blit(hint,  (self.sw//2 - hint.get_width()//2,  self.sh//2 + 60))
     
     def _draw_boss_proximity_warning(self):
-        """Draw ominous warnings when near any undefeated boss arena."""
+        """Draw ominous warnings when near any undefeated boss arena or Xenarch."""
         if not self.world or not self.player:
             return
 
         player_pos = self.player.get_center()
+        
+        # Check for Xenarch first (highest priority)
+        if self._xenarch_unlocked and not self._xenarch_active:
+            xenarch_poi = None
+            for poi in self.world.poi_markers:
+                if poi["type"] == "xenarch_arena" and not poi.get("defeated", False):
+                    xenarch_poi = poi
+                    break
+            
+            if xenarch_poi:
+                dx = xenarch_poi["pos"][0] - player_pos[0]
+                dy = xenarch_poi["pos"][1] - player_pos[1]
+                xenarch_dist = math.hypot(dx, dy)
+                
+                if xenarch_dist < 2000:
+                    from core.utils import pulse_value, draw_glow_circle
+                    pulse = pulse_value(self.game_time, speed=2.0, lo=0.4, hi=1.0)
+                    
+                    # Intense vignette
+                    vignette = pygame.Surface((self.sw, self.sh), pygame.SRCALPHA)
+                    alpha = int(100 * pulse * (1 - xenarch_dist / 2000))
+                    pygame.draw.circle(vignette, (100, 0, 100, alpha), (self.sw//2, self.sh//2),
+                                       max(100, self.sw), width=self.sw//2)
+                    self.screen.blit(vignette, (0, 0))
+                    
+                    # Warning text
+                    font_big = pygame.font.SysFont("consolas", 28, bold=True)
+                    font_small = pygame.font.SysFont("consolas", 16)
+                    
+                    c = (255, int(100 * pulse), 255)
+                    txt1 = font_big.render("⚠️ XENARCH AWAITS ⚠️", True, c)
+                    txt2 = font_small.render("The architect of Xenova itself...", True, (200, 100, 200))
+                    
+                    self.screen.blit(txt1, (self.sw//2 - txt1.get_width()//2, 60))
+                    self.screen.blit(txt2, (self.sw//2 - txt2.get_width()//2, 100))
+                    
+                    # Direction indicator
+                    angle = math.atan2(dy, dx)
+                    ix = self.sw//2 + math.cos(angle) * 160
+                    iy = self.sh//2 + math.sin(angle) * 160
+                    draw_glow_circle(self.screen, (255, 0, 255), (int(ix), int(iy)),
+                                     int(15 * pulse), alpha=int(180 * pulse), layers=4)
+                    return
+        
+        # Regular boss proximity warning
         closest_boss = None
         closest_dist = float("inf")
 
@@ -1069,7 +1536,12 @@ class Game:
 
                 elif poi["type"] == "nest":
                     captured = poi.get("captured", False)
-                    color = (0, 255, 180) if captured else poi["color"]
+                    if captured:
+                        color = (0, 255, 180)  # Cyan for captured
+                    elif self.world.is_nest_cleared(poi):
+                        color = (0, 255, 100)  # Green for cleared
+                    else:
+                        color = poi["color"]  # Red for active
                     pygame.draw.circle(map_surf, (*color, 100), (poi_x, poi_y), poi_r)
                     pygame.draw.circle(map_surf, color, (poi_x, poi_y), poi_r, width=1)
                     if captured:
@@ -1195,6 +1667,61 @@ class Game:
         confirm_btn.draw(self.screen, self.game_time)
         cancel_btn.draw(self.screen, self.game_time)
 
+    def _draw_xenarch_confirm(self):
+        """Draw Xenarch confirmation dialog - entering a different realm."""
+        if not self._xenarch_confirm_domain:
+            return
+        
+        domain = self._xenarch_confirm_domain
+        
+        # Semi-transparent overlay with magenta tint
+        overlay = pygame.Surface((self.sw, self.sh), pygame.SRCALPHA)
+        overlay.fill((50, 0, 50, 180))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Dialog panel
+        cx = self.sw // 2
+        cy = self.sh // 2
+        panel_w, panel_h = 500, 320
+        panel_x = cx - panel_w // 2
+        panel_y = cy - panel_h // 2
+        
+        panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        panel.fill((20, 5, 40, 250))
+        pygame.draw.rect(panel, (255, 0, 255), (0, 0, panel_w, panel_h), width=4, border_radius=10)
+        self.screen.blit(panel, (panel_x, panel_y))
+        
+        # Title
+        title_font = pygame.font.SysFont("consolas", 32, bold=True)
+        title = title_font.render("XENARCH", True, (255, 0, 255))
+        self.screen.blit(title, (cx - title.get_width()//2, panel_y + 20))
+        
+        # Description
+        desc_font = pygame.font.SysFont("consolas", 14)
+        desc_lines = [
+            "A rift opens before you.",
+            "The architect of Xenova itself awaits.",
+            "",
+            "You will enter a different realm.",
+            "There is no turning back once you enter.",
+            "",
+            "Are you ready for the ultimate challenge?"
+        ]
+        y_offset = panel_y + 80
+        for line in desc_lines:
+            if line:
+                desc = desc_font.render(line, True, (200, 150, 200))
+                self.screen.blit(desc, (cx - desc.get_width()//2, y_offset))
+            y_offset += 22
+        
+        # Buttons
+        from ui.menus import Button
+        confirm_btn = Button((cx - 110, panel_y + panel_h - 80, 220, 44), "ENTER THE REALM [ENTER]", (255, 0, 255))
+        cancel_btn = Button((cx - 110, panel_y + panel_h - 30, 220, 44), "RETREAT [ESC]", NEON_ORANGE)
+        
+        confirm_btn.draw(self.screen, self.game_time)
+        cancel_btn.draw(self.screen, self.game_time)
+
     def _grant_boss_reward(self):
         """Grant unique cell reward based on boss type."""
         if not self.player:
@@ -1232,3 +1759,24 @@ class Game:
             bonus_xp = 500
             self.player.gain_xp(bonus_xp)
             self.hud.notify(f"⭐ BOSS REWARD: +{bonus_xp} BONUS XP! ⭐", (255, 220, 0), duration=5.0)
+    
+    def _activate_godmode(self):
+        """Activate godmode - instant OP for testing."""
+        if not self.player:
+            return
+        
+        # Max out all stats
+        self.player.level = 50
+        self.player.xp = 999999
+        self.player.biomass = 500
+        self.player.max_biomass = 500
+        
+        # Heal all existing cells to full
+        for cell in self.player.cells:
+            cell.hp = cell.max_hp
+        
+        # Boost speed dramatically
+        self.player.body.velocity = (self.player.body.velocity.x * 3, self.player.body.velocity.y * 3)
+        
+        self.hud.notify("🔥 GODMODE ACTIVATED 🔥", (255, 0, 255), duration=3.0)
+        self.particles.emit(self.player.get_center(), (255, 0, 255), count=100, speed=400)
