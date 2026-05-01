@@ -1,0 +1,39 @@
+{
+  "slot": 1,
+  "race": "Lumenid",
+  "name": "Strain 2",
+  "level": 1,
+  "xp": 0,
+  "cells": [
+    "heart",
+    "basic",
+    "basic",
+    "basic"
+  ],
+  "cell_layout": {
+    "-2,0": "heart_lumenid",
+    "-1,0": "basic",
+    "0,0": "basic",
+    "1,0": "basic"
+  },
+  "unlocked_cells": [
+    "basic",
+    "heart",
+    "seeker",
+    "spike"
+  ],
+  "current_biome": "membrane",
+  "stats": {
+    "enemies_killed": 0,
+    "bosses_killed": 0,
+    "cells_lost": 0,
+    "absorbed_types": [],
+    "biomes_explored": [],
+    "skrix_shed": 0,
+    "nullborn_phases": 0,
+    "synergies_triggered": 0,
+    "xenarch_defeated": false
+  },
+  "achievements": [],
+  "scale": 1.0
+}
